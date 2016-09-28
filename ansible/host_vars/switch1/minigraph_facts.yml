@@ -394,10 +394,10 @@ minigraph_lo_interfaces:
     name: Loopback0
     prefixlen: 32
 minigraph_mgmt_interface:
-    addr: 10.3.147.195
-    gwaddr: 10.3.146.1
-    mask: 255.255.254.0
-    prefixlen: '23'
+    addr: 10.224.23.69
+    gwaddr: 10.224.23.254
+    mask: 255.255.255.0
+    prefixlen: '24'
 minigraph_neighbors:
     Ethernet0:
         name: ROUTER01T2

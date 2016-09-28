@@ -19,53 +19,53 @@
   tags: repo
 
 # Syslog
-- name: Install Syslog daemon
-  become: true
-  apt: pkg=rsyslog
-       state=latest
-  tags: syslog
+#- name: Install Syslog daemon
+#  become: true
+#  apt: pkg=rsyslog
+#       state=latest
+#  tags: syslog
 
-- name: Setup Syslog Daemon Config File
-  become: true
-  template: src=rsyslog.conf.j2
-            dest=/etc/rsyslog.conf
-  notify:
-    - Restart Syslog Daemon
-  tags: syslog
+#- name: Setup Syslog Daemon Config File
+#  become: true
+#  template: src=rsyslog.conf.j2
+#            dest=/etc/rsyslog.conf
+#  notify:
+#    - Restart Syslog Daemon
+#  tags: syslog
 
-- name: Setup Syslog Config Directory
-  become: true
-  copy: src=rsyslog.d/
-        dest=/etc/rsyslog.d/
-  notify:
-    - Restart Syslog Daemon
-  tags: syslog
+#- name: Setup Syslog Config Directory
+#  become: true
+#  copy: src=rsyslog.d/
+#        dest=/etc/rsyslog.d/
+#  notify:
+#    - Restart Syslog Daemon
+#  tags: syslog
 
-- name: Ensure Syslog Daemon started and enabled
-  become: true
-  service: name=rsyslog
-           state=started
-           enabled=yes
-  tags: syslog
+#- name: Ensure Syslog Daemon started and enabled
+#  become: true
+#  service: name=rsyslog
+#           state=started
+#           enabled=yes
+#  tags: syslog
 
 # NTP
 # This needs to be early in the playbook otherwise clock changes can cause problems
-- name: Install NTP daemon and ntpstat
-  become: true
-  apt: pkg={{ item }}
-       state=latest
-  with_items:
-  - ntp
-  - ntpstat
-  tags: ntp
+#- name: Install NTP daemon and ntpstat
+#  become: true
+#  apt: pkg={{ item }}
+#       state=latest
+#  with_items:
+#  - ntp
+#  - ntpstat
+#  tags: ntp
 
-- name: Setup NTP Daemon Config File
-  become: true
-  template: src=ntp.conf.j2
-            dest=/etc/ntp.conf
-  notify:
-    - Restart NTP Daemon
-  tags: ntp
+#- name: Setup NTP Daemon Config File
+#  become: true
+#  template: src=ntp.conf.j2
+#            dest=/etc/ntp.conf
+#  notify:
+#    - Restart NTP Daemon
+#  tags: ntp
 
 # Update initramfs
 - name: Update initramfs to prevent fsck error 2 at bootup

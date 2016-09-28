@@ -1,9 +1,9 @@
 ansible_ssh_user: admin
-ansible_ssh_pass: password
-ansible_become_pass: password
+ansible_ssh_pass: admin
+ansible_become_pass: admin
 sonicadmin_user: admin
-sonicadmin_password: password
-sonicadmin_initial_password: 123456
+sonicadmin_password: admin
+sonicadmin_initial_password: admin
 
 sonic_version: "v2"
 
@@ -33,17 +33,17 @@ orchagent_docker_volumes_dict:
 
 orchagent_docker_volumes: "{{ orchagent_docker_volumes_dict.keys() }}"
 
-apt_repo_ip: "10.0.0.5"
+apt_repo_ip: "ftp.us.debian.org"
 apt_default_release: "*"
 
 # ntp variables
-ntp_servers: ['10.0.0.1', '10.0.0.2']
+#ntp_servers: ['10.0.0.1', '10.0.0.2']
 
 # syslog variables
-syslog_servers: ['10.0.0.5', '10.0.0.6']
+#syslog_servers: ['10.0.0.5', '10.0.0.6']
 
 # dns variables
-dns_servers: ['10.0.0.5', '10.0.0.6']
+#dns_servers: ['10.0.0.5', '10.0.0.6']
 
 # snmp variables
 snmp_rocommunity: public
