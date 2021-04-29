@@ -1,4 +1,4 @@
-#ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "enabled_sflow_interfaces=[u'Ethernet116', u'Ethernet124', u'Ethernet112', u'Ethernet120'];active_collectors=[];dst_port=3;testbed_type='t0';router_mac=u'52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json';agent_id=u'10.250.0.101'" --relax --debug info --log-file /tmp/TestSflowCollector.test_two_collectors.log --socket-recv-size 16384
+i#ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "enabled_sflow_interfaces=[u'Ethernet116', u'Ethernet124', u'Ethernet112', u'Ethernet120'];active_collectors=[];dst_port=3;testbed_type='t0';router_mac=u'52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json';agent_id=u'10.250.0.101'" --relax --debug info --log-file /tmp/TestSflowCollector.test_two_collectors.log --socket-recv-size 16384
 #/usr/bin/python /usr/bin/ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "enabled_sflow_interfaces=[u'Ethernet116', u'Ethernet124', u'Ethernet112', u'Ethernet120'];active_collectors=['collector1'];dst_port=3;testbed_type='t0';router_mac='52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json';agent_id=u'10.250.0.101'" --relax --debug info --log-file /tmp/TestSflow.log --socket-recv-size 16384
 
 import ptf
@@ -104,11 +104,15 @@ class SflowTest(BaseTest):
                 datagram = json.loads(j)
                 agent= datagram["agent"]
                 samples = datagram["samples"]
+                localTime = datagram["unixSecondsUTC"]
+                sysUpTime = datagram["sysUpTime"]
                 for sample in samples:
                     sampleType = sample["sampleType"]
                     if sampleType == "FLOWSAMPLE":
                         flow_count+=1
                         port_sample[collector]['FlowSample'][flow_count] = sample
+                        port_sample[collector]['FlowSample'][flow_count]["localTime"] = localTime
+                        port_sample[collector]['FlowSample'][flow_count]["sysUpTime"] = sysUpTime
                     elif sampleType == "COUNTERSSAMPLE":
                         counter_count+=1
                         port_sample[collector]['CounterSample'][counter_count] = sample
@@ -167,6 +171,53 @@ class SflowTest(BaseTest):
         return data
 
     #--------------------------------------------------------------------------
+    
+    
+    def save_flow_sample_stats(self, samples, collector):
+
+        logging.info("---------------- Useful Stats collected for Debugging. Collector:  {}----------------------".format(collector))
+    
+        if (samples[collector]['flow_count'] == 0):
+            logging.info("No Flow Samples Found")
+            return
+    
+        flow_samples = samples[collector]['FlowSample']
+    
+        header = ("PktSize", "SamplePool", "LocalTime", "sysUpTime")
+    
+    
+        stats = {}
+        for port in self.interfaces:
+            stats[self.interfaces[port]['port_index']] = []
+            stats[self.interfaces[port]['port_index']]["num_flows"] = 0
+    
+        # samplePool value increments and only depends on the samples recieved at an interface
+        # Hence the base value is used as an offset to keep the data relevant to this test run.
+        start_sample_pool_value = flow_samples["1"]["samplePool"]
+    
+        for sample in flow_samples.values():
+            if sample['inputPort'] not in stats:
+                continue
+    
+            if ('elements' in sample and len(sample['elements']) > 0):
+                pktSize = sample['elements'][0]['sampledPacketSize']
+    
+            stats[sample['inputPort']].append([pktSize, sample['samplePool']-start_sample_pool_value, sample['localTime'], sample['sysUpTime']])
+            stats[sample['inputPort']]["num_flows"] += 1
+    
+        for dut_port in stats.keys():
+            if 60 < stats[dut_port]['num_flows'] < 140:
+                continue
+            else:
+                str = "\n {1:10} | {2:10} | {3:23} | {4:12} \n".format(header[0], header[1], header[2], header[3])
+                for i in range(0,len(stats[dut_port])):
+                    lis = stats[dut_port][i]
+                    str += "{1:10} | {2:10} | {3:23} | {4:12} \n".format(lis[0], lis[1], lis[2], lis[3])
+                logging.info("----------------- Dut Port : {} Num Flows Found: {}-------------- {}".format(dut_port,  stats[dut_port]['num_flows'], str))
+        return 
+        
+    
+    #--------------------------------------------------------------------------
 
     def analyze_counter_sample(self, data, collector, polling_int, port_sample):
         counter_sample = {}
@@ -214,6 +265,8 @@ class SflowTest(BaseTest):
         src_mac = self.dataplane.get_mac(0, 0)
         pktlen=100
         #send 100 * sampling_rate packets in each interface for better analysis
+        start_sec = time.time()
+        start_time = time.localtime()
         for j in range(0, 100, 1):
             index = 0
             for intf in self.interfaces:
@@ -230,6 +283,7 @@ class SflowTest(BaseTest):
                 send(self,src_port,tcp_pkt,count=no_of_packets)
                 index+=1
             pktlen += 10 # send traffic with different packet sizes
+        logging.info("... Time taken for sending the traffic {} ms, Started at: {}".format(time.time()-start_sec, start_time))
 
     #--------------------------------------------------------------------------
 
@@ -260,6 +314,16 @@ class SflowTest(BaseTest):
         thr2.join()
         logging.debug(self.collector0_samples)
         logging.debug(self.collector1_samples)
-        self.packet_analyzer(self.collector0_samples,'collector0',self.poll_tests)
-        self.packet_analyzer(self.collector1_samples,'collector1',self.poll_tests)
+        try:
+            self.packet_analyzer(self.collector0_samples,'collector0',self.poll_tests)
+        except Exception as e:
+            self.save_flow_sample_stats(self.collector0_samples,'collector0')
+            raise e
+        
+        try:  
+            self.packet_analyzer(self.collector1_samples,'collector1',self.poll_tests)
+        except Exception as e:
+            self.save_flow_sample_stats(self.collector0_samples,'collector0')
+            raise e
+
 
