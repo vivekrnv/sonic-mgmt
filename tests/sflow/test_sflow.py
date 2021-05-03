@@ -4,7 +4,7 @@
     Parameters:
         --enable_sflow_feature: Enable sFlow feature on DUT. Default is disabled
 
-        --enable_trail_run: Have a Trail Traffic run before running the actual sFlow tests. Default is disbled
+        --pre_learn_dst_mac: Learn the MAC before running the original test. Default is disbled
 """
 
 import pytest
@@ -92,7 +92,8 @@ def setup_ptf(ptfhost, collector_ports, var, tbinfo, request):
         ptfhost.shell('ifconfig eth%s %s/24' %(collector_ports[i],var['collector%s'%i]['ip_addr']))
     ptfhost.copy(content=var['portmap'],dest="/tmp/sflow_ports.json")
 
-    if request.config.getoption("--enable_trail_run"):
+    if request.config.getoption("--pre_learn_dst_mac"):
+        logging.info("Early MAC Learning is enabled, before running the actual sFlow test")
         params = {'testbed_type': tbinfo['topo']['name'],
                   'router_mac': var['router_mac'],
                   'dst_port' : var['ptf_test_indices'][2],

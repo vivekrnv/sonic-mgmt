@@ -2,7 +2,7 @@
 #/usr/bin/python /usr/bin/ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "enabled_sflow_interfaces=[u'Ethernet116', u'Ethernet124', u'Ethernet112', u'Ethernet120'];active_collectors=['collector1'];dst_port=3;testbed_type='t0';router_mac='52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json';agent_id=u'10.250.0.101'" --relax --debug info --log-file /tmp/TestSflow.log --socket-recv-size 16384
 
 ### Command for sending traffic without sFlow configured on the DUT
-#ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "sflow_not_enabled='yes';dst_port=3;testbed_type='t0';router_mac=u'52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json'" --relax --debug info --log-file /tmp/NoSflowTrafficRun.log --socket-recv-size 16384
+#ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "pre_learn_dst_mac='yes';dst_port=3;testbed_type='t0';router_mac=u'52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json'" --relax --debug info --log-file /tmp/NoSflowTrafficRun.log --socket-recv-size 16384
 
 import ptf
 import ptf.packet as scapy
@@ -42,8 +42,8 @@ class SflowTest(BaseTest):
         logging.info("Sflow interfaces under Test : %s" %self.interfaces)
         self.src_ip_list = ['192.158.8.1','192.168.16.1', '192.168.24.1','192.168.32.1']
         self.no_sflow = False
-        if 'sflow_not_enabled' in self.test_params and self.test_params['sflow_not_enabled'] == 'yes':
-            self.no_sflow = True
+        if 'pre_learn_dst_mac' in self.test_params and self.test_params['pre_learn_dst_mac'] == 'yes':
+            self.pre_learn_dst_mac = True
             return
 
         # Config required for running the test when the sflow is enabled
@@ -59,6 +59,8 @@ class SflowTest(BaseTest):
             self.poll_tests = False
 
         self.collectors=['collector0','collector1']
+        self.collector0_samples = {}
+        self.collector1_samples = {}
 
     def tearDown(self):
         self.cmd(["supervisorctl", "stop", "arp_responder"])
@@ -240,10 +242,11 @@ class SflowTest(BaseTest):
                 no_of_packets=self.interfaces[intf]['sample_rate']
                 send(self,src_port,tcp_pkt,count=no_of_packets)
                 index+=1
+            pktlen += 10 # send traffic with different packet sizes
 
     #--------------------------------------------------------------------------
 
-    def sendTrafficNoSflow(self):
+    def learnDstMac(self):
         logging.info("Sending Traffic without having the sflow configured")
         ip_dst_addr = '192.168.0.4'
         src_mac = self.dataplane.get_mac(0, 0)
@@ -268,8 +271,8 @@ class SflowTest(BaseTest):
     def runTest(self):
         self.generate_ArpResponderConfig()
         time.sleep(1)
-        if self.no_sflow:
-            self.sendTrafficNoSflow()
+        if self.pre_learn_dst_mac:
+            self.learnDstMac()
             return
 
         self.stop_collector=False
