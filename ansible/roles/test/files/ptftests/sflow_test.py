@@ -33,17 +33,18 @@ class SflowTest(BaseTest):
             logging.info("%s : %s" %(param,value))
         self.router_mac = self.test_params['router_mac']
         self.dst_port = self.test_params['dst_port']
+        self.sflow_ports_file = self.test_params['sflow_ports_file']
+        self.sflow_interfaces = []
         with open(self.sflow_ports_file) as fp:
             self.interfaces = json.load(fp)
             for port,index in self.interfaces.items():
                 self.sflow_interfaces.append(index["ptf_indices"])
         logging.info("Sflow interfaces under Test : %s" %self.interfaces)
+        self.src_ip_list = ['192.158.8.1','192.168.16.1', '192.168.24.1','192.168.32.1']
         self.no_sflow = False
         if 'sflow_not_enabled' in self.test_params and self.test_params['sflow_not_enabled'] == 'yes':
             self.no_sflow = True
             return
-            
-        self.src_ip_list = ['192.158.8.1','192.168.16.1', '192.168.24.1','192.168.32.1']
 
         # Config required for running the test when the sflow is enabled
         if 'enabled_sflow_interfaces' in self.test_params:
@@ -51,8 +52,6 @@ class SflowTest(BaseTest):
 
         self.agent_id = self.test_params['agent_id']
         self.active_col = self.test_params['active_collectors']
-        self.sflow_interfaces = []
-        self.sflow_ports_file = self.test_params['sflow_ports_file']
         if 'polling_int' in self.test_params:
             self.poll_tests = True
             self.polling_int =  self.test_params['polling_int']
@@ -262,16 +261,17 @@ class SflowTest(BaseTest):
                         ip_ttl=64)
             send(self,src_port,tcp_pkt,count=1)
             index+=1
+        time.sleep(10)
 
     #--------------------------------------------------------------------------
 
     def runTest(self):
+        self.generate_ArpResponderConfig()
+        time.sleep(1)
         if self.no_sflow:
             self.sendTrafficNoSflow()
             return
 
-        self.generate_ArpResponderConfig()
-        time.sleep(1)
         self.stop_collector=False
         thr1 = threading.Thread(target=self.collector_0)
         thr2 = threading.Thread(target=self.collector_1)

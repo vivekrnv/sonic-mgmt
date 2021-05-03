@@ -3,6 +3,8 @@
 
     Parameters:
         --enable_sflow_feature: Enable sFlow feature on DUT. Default is disabled
+
+        --enable_trail_run: Have a Trail Traffic run before running the actual sFlow tests. Default is disbled
 """
 
 import pytest
