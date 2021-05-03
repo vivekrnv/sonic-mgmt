@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope='module',autouse=True)
-def setup(duthosts, rand_one_dut_hostname, ptfhost, tbinfo, config_sflow_feature):
+def setup(request, duthosts, rand_one_dut_hostname, ptfhost, tbinfo, config_sflow_feature):
     duthost = duthosts[rand_one_dut_hostname]
     global var
     var = {}
@@ -71,7 +71,7 @@ def setup(duthosts, rand_one_dut_hostname, ptfhost, tbinfo, config_sflow_feature
         var['collector%s'%i]['port'] = udp_port
         udp_port += 1
     collector_ports = var['ptf_test_indices'][0:2]
-    setup_ptf(ptfhost,collector_ports)
+    setup_ptf(ptfhost,collector_ports, var, tbinfo, request)
 
     # -------- Testing ----------
     yield
@@ -79,7 +79,7 @@ def setup(duthosts, rand_one_dut_hostname, ptfhost, tbinfo, config_sflow_feature
     config_reload(duthost, config_source='minigraph', wait=120)
 
  # ----------------------------------------------------------------------------------
-def setup_ptf(ptfhost, collector_ports):
+def setup_ptf(ptfhost, collector_ports, var, tbinfo, request):
     root_dir   = "/root"
     extra_vars = {'arp_responder_args' : '--conf /tmp/sflow_arpresponder.conf'}
     ptfhost.host.options['variable_manager'].extra_vars.update(extra_vars)
@@ -89,6 +89,21 @@ def setup_ptf(ptfhost, collector_ports):
     for i in range(len(collector_ports)):
         ptfhost.shell('ifconfig eth%s %s/24' %(collector_ports[i],var['collector%s'%i]['ip_addr']))
     ptfhost.copy(content=var['portmap'],dest="/tmp/sflow_ports.json")
+
+    if request.config.getoption("--enable_trail_run"):
+        params = {'testbed_type': tbinfo['topo']['name'],
+                  'router_mac': var['router_mac'],
+                  'dst_port' : var['ptf_test_indices'][2],
+                  'sflow_not_enabled' : 'yes',
+                  'sflow_ports_file' : "/tmp/sflow_ports.json"}
+
+        ptf_runner(host=ptfhost,
+                   testdir="ptftests",
+                   platform_dir="ptftests",
+                   testname="sflow_test",
+                   params=params,
+                   socket_recv_size=16384,
+                   log_file="/tmp/NoSflowTrafficRun.log")
 
 # ----------------------------------------------------------------------------------
 
@@ -109,7 +124,7 @@ def config_dut_ports(duthost, ports, vlan):
 def get_ifindex(duthost, port):
      ifindex = duthost.shell('cat /sys/class/net/%s/ifindex' %port)['stdout']
      return ifindex
- 
+
 # ----------------------------------------------------------------------------------
 
 def get_port_index(duthost, port):
@@ -125,7 +140,7 @@ def config_sflow_agent(duthosts, rand_one_dut_hostname):
     duthost = duthosts[rand_one_dut_hostname]
     duthost.shell("config sflow agent-id del") # Remove any existing agent-id
     duthost.shell("config sflow agent-id add Loopback0")
-    yield   
+    yield
     duthost.shell("config sflow agent-id del")
 
 # ----------------------------------------------------------------------------------
@@ -502,7 +517,7 @@ class TestReboot():
         partial_ptf_runner(
               enabled_sflow_interfaces=var['sflow_ports'].keys(),
               active_collectors="['collector0','collector1']" )
-        
+
     def testWarmreboot(self, sflowbase_config, duthost, localhost, partial_ptf_runner, ptfhost):
 
         config_sflow(duthost,sflow_status='enable')
@@ -520,5 +535,3 @@ class TestReboot():
         partial_ptf_runner(
               enabled_sflow_interfaces=var['sflow_ports'].keys(),
               active_collectors="['collector0','collector1']" )
-
-

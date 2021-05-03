@@ -1,6 +1,9 @@
 #ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "enabled_sflow_interfaces=[u'Ethernet116', u'Ethernet124', u'Ethernet112', u'Ethernet120'];active_collectors=[];dst_port=3;testbed_type='t0';router_mac=u'52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json';agent_id=u'10.250.0.101'" --relax --debug info --log-file /tmp/TestSflowCollector.test_two_collectors.log --socket-recv-size 16384
 #/usr/bin/python /usr/bin/ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "enabled_sflow_interfaces=[u'Ethernet116', u'Ethernet124', u'Ethernet112', u'Ethernet120'];active_collectors=['collector1'];dst_port=3;testbed_type='t0';router_mac='52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json';agent_id=u'10.250.0.101'" --relax --debug info --log-file /tmp/TestSflow.log --socket-recv-size 16384
 
+### Command for sending traffic without sFlow configured on the DUT
+#ptf --test-dir ptftests sflow_test --platform-dir ptftests --platform remote -t "sflow_not_enabled='yes';dst_port=3;testbed_type='t0';router_mac=u'52:54:00:f7:0c:d0';sflow_ports_file='/tmp/sflow_ports.json'" --relax --debug info --log-file /tmp/NoSflowTrafficRun.log --socket-recv-size 16384
+
 import ptf
 import ptf.packet as scapy
 import ptf.dataplane as dataplane
@@ -26,11 +29,26 @@ class SflowTest(BaseTest):
     #--------------------------------------------------------------------------
     def setUp(self):
         self.dataplane = ptf.dataplane_instance
+        for param,value  in self.test_params.items():
+            logging.info("%s : %s" %(param,value))
         self.router_mac = self.test_params['router_mac']
         self.dst_port = self.test_params['dst_port']
+        with open(self.sflow_ports_file) as fp:
+            self.interfaces = json.load(fp)
+            for port,index in self.interfaces.items():
+                self.sflow_interfaces.append(index["ptf_indices"])
+        logging.info("Sflow interfaces under Test : %s" %self.interfaces)
+        self.no_sflow = False
+        if 'sflow_not_enabled' in self.test_params and self.test_params['sflow_not_enabled'] == 'yes':
+            self.no_sflow = True
+            return
+            
+        self.src_ip_list = ['192.158.8.1','192.168.16.1', '192.168.24.1','192.168.32.1']
 
+        # Config required for running the test when the sflow is enabled
         if 'enabled_sflow_interfaces' in self.test_params:
             self.enabled_intf = self.test_params['enabled_sflow_interfaces']
+
         self.agent_id = self.test_params['agent_id']
         self.active_col = self.test_params['active_collectors']
         self.sflow_interfaces = []
@@ -40,14 +58,9 @@ class SflowTest(BaseTest):
             self.polling_int =  self.test_params['polling_int']
         else:
             self.poll_tests = False
-        with open(self.sflow_ports_file) as fp:
-            self.interfaces = json.load(fp)
-            for port,index in self.interfaces.items():
-                self.sflow_interfaces.append(index["ptf_indices"])
-        logging.info("Sflow interfaces under Test : %s" %self.interfaces)
+
         self.collectors=['collector0','collector1']
-        for param,value  in self.test_params.items():
-            logging.info("%s : %s" %(param,value) )
+
     def tearDown(self):
         self.cmd(["supervisorctl", "stop", "arp_responder"])
         self.cmd(["killall" , "sflowtool"])
@@ -209,7 +222,6 @@ class SflowTest(BaseTest):
     #---------------------------------------------------------------------------
 
     def sendTraffic(self):
-        self.src_ip_list = ['192.158.8.1','192.168.16.1', '192.168.24.1','192.168.32.1']
         ip_dst_addr = '192.168.0.4'
         src_mac = self.dataplane.get_mac(0, 0)
         pktlen=100
@@ -229,11 +241,35 @@ class SflowTest(BaseTest):
                 no_of_packets=self.interfaces[intf]['sample_rate']
                 send(self,src_port,tcp_pkt,count=no_of_packets)
                 index+=1
-            pktlen += 10 # send traffic with different packet sizes
+
+    #--------------------------------------------------------------------------
+
+    def sendTrafficNoSflow(self):
+        logging.info("Sending Traffic without having the sflow configured")
+        ip_dst_addr = '192.168.0.4'
+        src_mac = self.dataplane.get_mac(0, 0)
+        pktlen=100
+        index = 0
+        for intf in self.interfaces:
+            ip_src_addr = str(self.src_ip_list[index])
+            src_port = self.interfaces[intf]['ptf_indices']
+            dst_port = self.dst_port
+            tcp_pkt = simple_tcp_packet(pktlen=pktlen,
+                        eth_dst=self.router_mac,
+                        eth_src=src_mac,
+                        ip_src=ip_src_addr,
+                        ip_dst=ip_dst_addr,
+                        ip_ttl=64)
+            send(self,src_port,tcp_pkt,count=1)
+            index+=1
 
     #--------------------------------------------------------------------------
 
     def runTest(self):
+        if self.no_sflow:
+            self.sendTrafficNoSflow()
+            return
+
         self.generate_ArpResponderConfig()
         time.sleep(1)
         self.stop_collector=False
@@ -262,4 +298,3 @@ class SflowTest(BaseTest):
         logging.debug(self.collector1_samples)
         self.packet_analyzer(self.collector0_samples,'collector0',self.poll_tests)
         self.packet_analyzer(self.collector1_samples,'collector1',self.poll_tests)
-
