@@ -97,7 +97,7 @@ def setup_ptf(ptfhost, collector_ports, var, tbinfo, request):
         params = {'testbed_type': tbinfo['topo']['name'],
                   'router_mac': var['router_mac'],
                   'dst_port' : var['ptf_test_indices'][2],
-                  'sflow_not_enabled' : 'yes',
+                  'pre_learn_dst_mac' : 'yes',
                   'sflow_ports_file' : "/tmp/sflow_ports.json"}
 
         ptf_runner(host=ptfhost,

@@ -41,7 +41,7 @@ class SflowTest(BaseTest):
                 self.sflow_interfaces.append(index["ptf_indices"])
         logging.info("Sflow interfaces under Test : %s" %self.interfaces)
         self.src_ip_list = ['192.158.8.1','192.168.16.1', '192.168.24.1','192.168.32.1']
-        self.no_sflow = False
+        self.pre_learn_dst_mac = False
         if 'pre_learn_dst_mac' in self.test_params and self.test_params['pre_learn_dst_mac'] == 'yes':
             self.pre_learn_dst_mac = True
             return
@@ -59,8 +59,6 @@ class SflowTest(BaseTest):
             self.poll_tests = False
 
         self.collectors=['collector0','collector1']
-        self.collector0_samples = {}
-        self.collector1_samples = {}
 
     def tearDown(self):
         self.cmd(["supervisorctl", "stop", "arp_responder"])
