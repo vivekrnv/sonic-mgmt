@@ -38,8 +38,7 @@ THERMAL_NAMING_RULE = {
     "gearbox": {
         "name": "Gearbox {} Temp",
         "temperature": "gearbox{}_temp_input",
-        "high_threshold": "mlxsw-gearbox{}/temp_trip_hot",
-        "high_critical_threshold": "mlxsw-gearbox{}/temp_trip_crit"
+        "high_threshold": "mlxsw-gearbox{}/temp_trip_hot"
     },
     "asic_ambient": {
         "name": "ASIC",
