@@ -6,7 +6,7 @@ import importlib
 from ipaddress import ip_address
 
 from dash_api.appliance_pb2 import Appliance
-from dash_api.eni_pb2 import Eni, State  # noqa: F401
+from dash_api.eni_pb2 import Eni, State, EniMode  # noqa: F401
 from dash_api.eni_route_pb2 import EniRoute
 from dash_api.route_group_pb2 import RouteGroup
 from dash_api.route_pb2 import Route
@@ -84,6 +84,8 @@ def parse_dash_proto(key: str, proto_dict: dict):
                 new_dict[key] = parse_ip_prefix(value)
             elif field_map[key].message_type.name == "Guid":
                 new_dict[key] = parse_guid(value)
+            elif field_map[key].message_type.name == "ValueOrRange":
+                new_dict[key] = parse_value_or_range(value)
 
         elif field_map[key].type == field_map[key].TYPE_BYTES:
             new_dict[key] = parse_byte_field(value)
