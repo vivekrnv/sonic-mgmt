@@ -1,4 +1,4 @@
-from dash_api.eni_pb2 import State
+from dash_api.eni_pb2 import State, EniMode
 from dash_api.route_type_pb2 import ActionType, EncapType, RoutingType
 from dash_api.types_pb2 import IpVersion
 
@@ -53,12 +53,14 @@ TRUSTED_VNI = "800"
 METER_POLICY_V4 = "MeterPolicyV4"
 METER_RULE_V4_PREFIX1 = "48.10.5.0/24"
 METER_RULE_V4_PREFIX2 = "92.6.0.0/16"
+RETURN_PATH_VNI = 202
 
 APPLIANCE_CONFIG = {
     f"DASH_APPLIANCE_TABLE:{APPLIANCE_ID}": {
         "sip": APPLIANCE_VIP,
         "vm_vni": VM_VNI,
-        "local_region_id": LOCAL_REGION_ID
+        "local_region_id": LOCAL_REGION_ID,
+        "trusted_vnis": str(ENCAP_VNI)
     }
 }
 APPLIANCE_FNIC_CONFIG = {
@@ -66,6 +68,7 @@ APPLIANCE_FNIC_CONFIG = {
         "sip": APPLIANCE_VIP,
         "vm_vni": VM_VNI,
         "outbound_direction_lookup": OUTBOUND_DIR_LOOKUP,
+        "trusted_vnis": str(ENCAP_VNI)
     }
 }
 
@@ -78,7 +81,8 @@ ENI_TRUSTED_VNI_CONFIG = {
         "admin_state": State.STATE_ENABLED,
         "pl_underlay_sip": APPLIANCE_VIP,
         "pl_sip_encoding": f"{PL_ENCODING_IP}/{PL_ENCODING_MASK}",
-        "eni_mode": EniMode.MODE_FNIC
+        "eni_mode": EniMode.MODE_FNIC,
+        "trusted_vnis": VM_VNI
     }
 }
 
@@ -119,6 +123,7 @@ ENI_CONFIG = {
         "pl_underlay_sip": APPLIANCE_VIP,
         "pl_sip_encoding": f"{PL_ENCODING_IP}/{PL_ENCODING_MASK}",
         "v4_meter_policy_id": METER_POLICY_V4,
+        "trusted_vnis": VM_VNI
     }
 }
 
@@ -157,7 +162,7 @@ TUNNEL2_CONFIG = {
     f"DASH_TUNNEL_TABLE:{TUNNEL2}": {
         "endpoints": TUNNEL2_ENDPOINT_IPS,
         "encap_type": EncapType.ENCAP_TYPE_VXLAN,
-        "vni": 202,
+        "vni": RETURN_PATH_VNI,
     }
 }
 

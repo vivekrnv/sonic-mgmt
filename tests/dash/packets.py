@@ -128,7 +128,7 @@ def inbound_pl_packets(config, floating_nic=False, inner_packet_type='udp', vxla
         ip_id=0,
         udp_dport=vxlan_udp_dport,
         udp_sport=VXLAN_UDP_BASE_SRC_PORT,
-        vxlan_vni=202 if floating_nic else int(pl.VM_VNI),
+        vxlan_vni=pl.RETURN_PATH_VNI if floating_nic else int(pl.VM_VNI),
         inner_frame=exp_inner_packet
     )
 
