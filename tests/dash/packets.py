@@ -109,7 +109,7 @@ def inbound_pl_packets(config, floating_nic=False, inner_packet_type='udp', vxla
 
     exp_inner_packet = generate_inner_packet(inner_packet_type)(
         eth_src=pl.ENI_MAC if floating_nic else pl.REMOTE_MAC,
-        eth_dst=pl.VM_MAC if floating_nic else pl.ENI_MAC,
+        eth_dst=pl.ENI_MAC,
         ip_src=pl.PE1_CA,
         ip_dst=pl.VM1_CA,
         ip_id=0,
