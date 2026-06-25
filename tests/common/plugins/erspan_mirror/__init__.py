@@ -17,6 +17,12 @@ from .erspan_mirror_utils import (
 
 logger = logging.getLogger(__name__)
 
+ERSPAN_CAPTURE_DST_IP = "2.2.2.2"
+ERSPAN_CAPTURE_INTF = "any"
+ERSPAN_CAPTURE_LINK_TYPE = "LINUX_SLL"
+# Linux cooked header + IPv4 + GRE + ERSPAN II: 16 + 20 + 4 + 22 bytes.
+ERSPAN_COOKED_STRIP_BYTES = 62
+
 
 def _tcpdump_exited(host, pcap_path):
     res = host.shell(
@@ -77,8 +83,8 @@ def _erspan_mirror(request, ptfhost, tbinfo, erspan_mirror_targets):
     """
     For every (duthost, src_port) in `erspan_mirror_targets`:
       - create one ERSPAN mirror session,
-      - start a tcpdump on the corresponding PTF monitor interface,
-      - on teardown: stop tcpdump, strip ERSPAN headers, fetch pcaps,
+      - start one tcpdump on the PTF,
+      - on teardown: stop tcpdump, split by ERSPAN source IP, strip ERSPAN headers, fetch pcaps,
         remove the mirror session.
     """
     targets = erspan_mirror_targets
@@ -87,55 +93,75 @@ def _erspan_mirror(request, ptfhost, tbinfo, erspan_mirror_targets):
     test_name = re.sub(r"[^\w.-]+", "_", request.node.name)
     # session name has length limit so keep only first 20 characters
     session_base_name = test_name[:20]
+    raw_pcap_path = f"/tmp/{test_name}_erspan_mirror.pcap"
     sessions = []
+    capture_started = False
 
     try:
         for n, target in enumerate(targets, start=1):
             duthost, src_port = target
             session_name = f"{session_base_name}_{n}"
             pcap_path = f"/tmp/{test_name}_{duthost.hostname}_{src_port}.pcap"
-            dst_ip = f"2.2.2.{n}"
-            tcpdump_filter = f"proto gre and dst {dst_ip}"
+            src_ip = f"1.1.1.{n}"
 
             # Register before any fail-able op, so the finally block cleans up
             # even if a later step (assert / pcap start) raises mid-setup.
             session = {
                 "duthost": duthost,
                 "session_name": session_name,
-                "pcap_path": None,
+                "pcap_path": pcap_path,
+                "src_ip": src_ip,
             }
             sessions.append(session)
 
-            add_erspan_mirror_session(duthost, session_name, src_port, dst_ip)
+            add_erspan_mirror_session(
+                duthost,
+                session_name,
+                src_port,
+                ERSPAN_CAPTURE_DST_IP,
+                src_ip=src_ip,
+            )
             monitor_ptf_intf = get_monitor_ptf_intf(duthost, session_name, tbinfo)
             pt_assert(
                 monitor_ptf_intf,
                 f"Failed to resolve monitor PTF interface for session {session_name}",
             )
-            run_pcap(ptfhost, pcap_path, monitor_ptf_intf, tcpdump_filter)
-            session["pcap_path"] = pcap_path
+
+        if sessions:
+            run_pcap(
+                ptfhost,
+                raw_pcap_path,
+                ERSPAN_CAPTURE_INTF,
+                f"proto gre and dst {ERSPAN_CAPTURE_DST_IP}",
+                link_type=ERSPAN_CAPTURE_LINK_TYPE,
+            )
+            capture_started = True
 
         yield
     finally:
         logger.info("erspan_mirror teardown")
-        pcap_sessions = [s for s in sessions if s["pcap_path"]]
-        for s in pcap_sessions:
+        if capture_started:
             ptfhost.shell(
-                f"pkill -SIGINT -f '[t]cpdump.*{s['pcap_path']}'",
+                f"pkill -SIGINT -f '[t]cpdump.*{raw_pcap_path}'",
                 module_ignore_errors=True,
             )
-        # Wait for all tcpdumps to exit
+            if not wait_until(5, 0.2, 0, _tcpdump_exited, ptfhost, raw_pcap_path):
+                logger.warning(f"tcpdump for {raw_pcap_path} did not exit within 5s")
+
+        # Split the single capture into per-port pcaps, strip ERSPAN headers, and fetch them.
+        pcap_sessions = sessions if capture_started else []
         for s in pcap_sessions:
-            if not wait_until(5, 0.2, 0, _tcpdump_exited, ptfhost, s["pcap_path"]):
-                logger.warning(f"tcpdump for {s['pcap_path']} did not exit within 5s")
-        # Strip ERSPAN headers and fetch pcaps
-        for s in pcap_sessions:
+            split_filter = f"proto gre and src {s['src_ip']} and dst {ERSPAN_CAPTURE_DST_IP}"
+            ptfhost.shell(
+                f"tcpdump -r {raw_pcap_path} -w {s['pcap_path']} '{split_filter}'",
+                module_ignore_errors=True,
+            )
             stripped_pcap = s["pcap_path"].replace(".pcap", "_stripped.pcap")
-            # Eth + IPv4 + GRE: 38 bytes, ERSPAN II: 22 bytes -> strip 60 bytes
             ptfhost.shell(
-                f"editcap -C 60 {s['pcap_path']} {stripped_pcap}",
+                f"editcap -C {ERSPAN_COOKED_STRIP_BYTES} -T ether {s['pcap_path']} {stripped_pcap}",
                 module_ignore_errors=True,
             )
+            ptfhost.file(path=s["pcap_path"], state="absent")
             ptfhost.fetch(src=stripped_pcap, dest="/tmp/", flat=True, fail_on_missing=False)
             local_stripped = os.path.join("/tmp", os.path.basename(stripped_pcap))
             if not os.path.exists(local_stripped):
@@ -149,6 +175,8 @@ def _erspan_mirror(request, ptfhost, tbinfo, erspan_mirror_targets):
                 )
             except Exception as e:
                 logger.warning(f"Failed to attach pcap {local_stripped} to allure report: {e}")
+        if capture_started:
+            ptfhost.file(path=raw_pcap_path, state="absent")
         # Remove ERSPAN sessions
         for s in sessions:
             remove_mirror_session(s["duthost"], s["session_name"])

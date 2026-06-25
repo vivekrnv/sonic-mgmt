@@ -2,12 +2,15 @@
 
 ## Overview
 
-Automatically creates ERSPAN mirror sessions on the DUT and starts a tcpdump
-capture on the corresponding PTF monitor port for the duration of each test.
-On teardown the ERSPAN encapsulation (60B Eth+IPv4+GRE+ERSPAN-II) is stripped
-with `editcap -C 60`, the stripped pcap is fetched to the local host
+Automatically creates ERSPAN mirror sessions on the DUT and starts one tcpdump
+capture on the PTF for the duration of each test. All sessions use the same
+ERSPAN destination IP and a unique ERSPAN source IP.
+On teardown the raw capture is split by source IP, the ERSPAN encapsulation
+(16B Linux cooked + IPv4 + GRE + ERSPAN-II) is stripped with `editcap -C 62`,
+the stripped pcap is fetched to the local host
 (`/tmp/<test>_<dut>_<port>_stripped.pcap`) and attached to the Allure report,
-and the mirror session is removed. The raw pcap is left on the PTF.
+and the mirror session is removed. The combined raw pcap and per-port unstripped
+pcaps are removed from the PTF after processing.
 
 This lets tests get a packet capture of what the DUT actually sent / received
 on a dataplane port without wiring `mirror_session` and `tcpdump` into every
@@ -29,9 +32,9 @@ section) the plugin is a no-op. This default works for both single-DUT
 override anything to get full DPC coverage:
 
 * Single DUT with 4 DPUs -> 4 sessions per test (`<test>_1` .. `<test>_4`,
-  `dst=2.2.2.1` .. `2.2.2.4`).
+  `src=1.1.1.1` .. `1.1.1.4`, `dst=2.2.2.2`).
 * HA setup with 2 DUTs x 4 DPUs -> 8 sessions per test (`<test>_1` ..
-  `<test>_8`, `dst=2.2.2.1` .. `2.2.2.8`).
+  `<test>_8`, `src=1.1.1.1` .. `1.1.1.8`, `dst=2.2.2.2`).
 
 Mirroring all DPC ports means the capture set does not depend on
 `--dpu-pattern` ordering or on which DPUs a particular test happens to
